@@ -3,12 +3,18 @@
 // *****************************************************
 
 #include "process_runner.h"
+#include <chrono>
 #include <iostream>
+#include <thread>
 // #include "sinks/rotating_sqllite_sink.h"
 // #include <spdlog/sinks/rotating_file_sink.h>
 
 int main(/*int argc, char const* argv[]*/) {
-  std::vector<std::string> args;
-  ProcessRunner            ps("", args, "22");
+
+  {
+    ProcessRunner ps("ls");
+    std::this_thread::sleep_for(std::chrono::seconds(10));
+    ProcessRunner::run_once("ls");
+  }
   return 0;
 }

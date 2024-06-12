@@ -18,6 +18,7 @@ set(CMAKE_C_CLANG_TIDY
 endif()
 set(COMPONENT1 ${PROJECT_NAME})
 find_package(Poco REQUIRED Foundation)
+find_package(spdlog CONFIG REQUIRED)
 
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
@@ -71,6 +72,7 @@ set_target_properties(
 
 target_link_libraries(${COMPONENT1}
 	PUBLIC Poco::Foundation
+	PRIVATE spdlog::spdlog
 )
 
 # target_compile_features(${COMPONENT1}

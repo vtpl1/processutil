@@ -1,12 +1,12 @@
 // *****************************************************
 //    Copyright 2022 Videonetics Technology Pvt Ltd
 // *****************************************************
+#include "process_runner.h"
 #include <Poco/Exception.h>
 #include <Poco/Path.h>
+#include <spdlog/spdlog.h>
 #include <sstream>
-
-#include "process_runner.h"
-
+ProcessRunner::ProcessRunner(std::string command) : ProcessRunner(std::move(command), std::vector<std::string>(), "") {}
 ProcessRunner::ProcessRunner(std::string command, std::vector<std::string> args, std::string prologue_command,
                              std::vector<std::string> prologue_args, std::string epilogue_command,
                              std::vector<std::string> epilogue_args, std::string unique_id, std::string app_install_dir)
@@ -35,7 +35,7 @@ ProcessRunner::~ProcessRunner() {
   //   _thread->join()
   // }
   if (_thread->wait_for(std::chrono::seconds(2)) == std::future_status::timeout) {
-    RAY_LOG_INF << "Thread not yet terminated, forcing, for " << _composite_command;
+    spdlog::warn("Thread not yet terminated, forcing, for {}", _composite_command);
     if (_process_handle) {
       Poco::Process::kill(*_process_handle);
     }
@@ -51,7 +51,7 @@ void ProcessRunner::_signal_to_stop() {
   }
   _is_already_shutting_down = true;
   _do_shutdown              = true;
-  int id                    = _get_id();
+  const int id              = _get_id();
   if (id > 0) {
     Poco::Process::requestTermination(id);
   }
@@ -80,31 +80,39 @@ int ProcessRunner::_get_id() {
 
 std::string ProcessRunner::get_composite_command() { return _composite_command; }
 
+void print_last_exit_status(int last_exit_code) {
+  if (last_exit_code == 0) {
+    spdlog::info("Process returned with:: {}", last_exit_code);
+  } else {
+    spdlog::error("Process returned with:: {}", last_exit_code);
+  }
+}
+
 void ProcessRunner::run() {
   {
-    std::lock_guard<std::mutex> lock_thread_running(_thread_running_mutex);
+    const std::lock_guard<std::mutex> lock_thread_running(_thread_running_mutex);
     _is_thread_running = true;
   }
   _thread_running_cv.notify_all();
   std::this_thread::sleep_for(std::chrono::seconds(1));
   if (!_prologue_command.empty()) {
-    RAY_LOG_INF << "Executing prelogue in thread";
+    spdlog::info("Executing prelogue in thread");
     run_once(_prologue_command, _prologue_args, _unique_id, _app_install_dir);
   }
-  RAY_LOG_INF << "Thread Started for " << _composite_command;
+  spdlog::info("Thread Started for {}", _composite_command);
   while (!_do_shutdown) {
     try {
       _process_handle = std::make_unique<Poco::ProcessHandle>(Poco::Process::launch(_command, _args, _app_install_dir));
     } catch (Poco::Exception& e) {
-      RAY_LOG_ERR << "ProcessHandle Poco Exception:" << e.what();
+      spdlog::error("ProcessHandle Poco Exception: {}", e.what());
     } catch (const std::exception& e) {
-      RAY_LOG_ERR << "ProcessHandle Exception:: " << e.what();
+      spdlog::error("ProcessHandle Exception:: {}", e.what());
     }
     if (_process_handle) {
       if (_process_handle->id() > 0) {
         _last_exit_code = 0;
         _last_exit_code = _process_handle->wait();
-        RAY_LOG_INF << "Process returned with:: " << _last_exit_code;
+        print_last_exit_status((int)_last_exit_code);
       }
       _process_handle = nullptr;
     } else {
@@ -113,30 +121,36 @@ void ProcessRunner::run() {
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
   }
   if (!_epilogue_command.empty()) {
-    RAY_LOG_INF << "Executing epilogue in thread";
+    spdlog::info("Executing epilogue in thread");
     run_once(_epilogue_command, _epilogue_args, _unique_id, _app_install_dir);
   }
 
-  RAY_LOG_INF << "Thread Stopped for " << _composite_command;
+  spdlog::info("Thread Stopped for {}", _composite_command);
+}
+
+int ProcessRunner::run_once(const std::string& command) { return run_once(command, std::vector<std::string>()); }
+
+int ProcessRunner::run_once(const std::string& command, const std::vector<std::string>& args) {
+  return run_once(command, args, "", "");
 }
 
 int ProcessRunner::run_once(const std::string& command, const std::vector<std::string>& args,
                             const std::string& unique_id, const std::string& app_install_dir) {
   std::unique_ptr<Poco::ProcessHandle> process_handle;
   int                                  last_exit_code = -1;
-  RAY_LOG_INF << "Starting process " << _compose_composite_command(command, args, unique_id, app_install_dir);
+  spdlog::info("Starting process {}", _compose_composite_command(command, args, unique_id, app_install_dir));
   try {
     process_handle = std::make_unique<Poco::ProcessHandle>(Poco::Process::launch(command, args, app_install_dir));
   } catch (Poco::Exception& e) {
-    RAY_LOG_ERR << "Poco::Exception " << e.what();
+    spdlog::error("Poco::Exception {}", e.what());
   } catch (const std::exception& e) {
-    RAY_LOG_ERR << e.what();
+    spdlog::error("Std exception {}", e.what());
   }
   if (process_handle) {
     if (process_handle->id() > 0) {
       // last_exit_code = 0;
       last_exit_code = process_handle->wait();
-      RAY_LOG_INF << "Process returned with:: " << last_exit_code;
+      print_last_exit_status(last_exit_code);
     }
     process_handle = nullptr;
   } else {

@@ -43,14 +43,20 @@ private:
                                                 const std::string& unique_id, const std::string& app_install_dir);
 
 public:
+  ProcessRunner(std::string command);
   ProcessRunner(std::string command, std::vector<std::string> args, std::string unique_id);
   ProcessRunner(std::string command, std::vector<std::string> args, std::string prologue_command,
                 std::vector<std::string> prologue_args, std::string unique_id = "", std::string app_install_dir = ".");
+
   ProcessRunner(std::string command, std::vector<std::string> args, std::string prologue_command,
                 std::vector<std::string> prologue_args, std::string epilogue_command,
                 std::vector<std::string> epilogue_args, std::string unique_id = "", std::string app_install_dir = ".");
-  static int run_once(const std::string& command, const std::vector<std::string>& args,
-                      const std::string& unique_id = "", const std::string& app_install_dir = ".");
+
+  static int run_once(const std::string& command);
+  static int run_once(const std::string& command, const std::vector<std::string>& args);
+  static int run_once(const std::string& command, const std::vector<std::string>& args, const std::string& unique_id,
+                      const std::string& app_install_dir);
+
   virtual ~ProcessRunner();
   void        signal_to_stop();
   bool        is_running();
