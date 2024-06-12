@@ -8,19 +8,8 @@ Checks:          'clang-diagnostic-*,
                   cppcoreguidelines-*,
                   misc-*,
                   -modernize-use-trailing-return-type,
-                  -cppcoreguidelines-avoid-magic-numbers,
-                  -readability-magic-numbers,
-                  -readability-identifier-length,
-                  -readability-identifier-naming,
-                  -readability-redundant-inline-specifier,
-                  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
-                  -cppcoreguidelines-owning-memory,
-                  -cppcoreguidelines-macro-usage,
-                  -cppcoreguidelines-pro-type-reinterpret-cast,
-                  -misc-no-recursion,
-                  -misc-use-anonymous-namespace,
-                  -misc-include-cleaner,
-                  -bugprone-easily-swappable-parameters'
+                  -readability-identifier-length'
+
 WarningsAsErrors: ''
 HeaderFileExtensions:
   - ''

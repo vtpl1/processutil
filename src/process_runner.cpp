@@ -3,9 +3,23 @@
 // *****************************************************
 #include "process_runner.h"
 #include <Poco/Exception.h>
-#include <Poco/Path.h>
+#include <Poco/Pipe.h>
+#include <Poco/PipeStream.h>
+#include <Poco/Process.h>
+#include <Poco/StreamCopier.h>
+#include <chrono>
+#include <exception>
+#include <future>
+#include <memory>
+#include <mutex>
 #include <spdlog/spdlog.h>
 #include <sstream>
+#include <string>
+#include <thread>
+#include <utility>
+#include <vector>
+
+constexpr int RETRY_TIMEOUT = 300;
 ProcessRunner::ProcessRunner(std::string command) : ProcessRunner(std::move(command), std::vector<std::string>(), "") {}
 ProcessRunner::ProcessRunner(std::string command, std::vector<std::string> args, std::string prologue_command,
                              std::vector<std::string> prologue_args, std::string epilogue_command,
@@ -80,7 +94,7 @@ int ProcessRunner::_get_id() {
 
 std::string ProcessRunner::get_composite_command() { return _composite_command; }
 
-void print_last_exit_status(int last_exit_code) {
+void PrintLastExitStatus(int last_exit_code) {
   if (last_exit_code == 0) {
     spdlog::info("Process returned with:: {}", last_exit_code);
   } else {
@@ -112,13 +126,13 @@ void ProcessRunner::run() {
       if (_process_handle->id() > 0) {
         _last_exit_code = 0;
         _last_exit_code = _process_handle->wait();
-        print_last_exit_status((int)_last_exit_code);
+        PrintLastExitStatus((int)_last_exit_code);
       }
       _process_handle = nullptr;
     } else {
       // break; keep on trying
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    std::this_thread::sleep_for(std::chrono::milliseconds(RETRY_TIMEOUT));
   }
   if (!_epilogue_command.empty()) {
     spdlog::info("Executing epilogue in thread");
@@ -129,17 +143,16 @@ void ProcessRunner::run() {
 }
 
 int ProcessRunner::run_once(const std::string& command) { return run_once(command, std::vector<std::string>()); }
-
 int ProcessRunner::run_once(const std::string& command, const std::vector<std::string>& args) {
   return run_once(command, args, "", "");
 }
-
 int ProcessRunner::run_once(const std::string& command, const std::vector<std::string>& args,
                             const std::string& unique_id, const std::string& app_install_dir) {
   std::unique_ptr<Poco::ProcessHandle> process_handle;
   int                                  last_exit_code = -1;
   spdlog::info("Starting process {}", _compose_composite_command(command, args, unique_id, app_install_dir));
   try {
+
     process_handle = std::make_unique<Poco::ProcessHandle>(Poco::Process::launch(command, args, app_install_dir));
   } catch (Poco::Exception& e) {
     spdlog::error("Poco::Exception {}", e.what());
@@ -150,7 +163,42 @@ int ProcessRunner::run_once(const std::string& command, const std::vector<std::s
     if (process_handle->id() > 0) {
       // last_exit_code = 0;
       last_exit_code = process_handle->wait();
-      print_last_exit_status(last_exit_code);
+      PrintLastExitStatus(last_exit_code);
+    }
+    process_handle = nullptr;
+  } else {
+    // break; keep on trying
+  }
+  return last_exit_code;
+}
+
+int ProcessRunner::run_once(const std::string& command, std::stringstream& ss) {
+  return run_once(command, std::vector<std::string>(), ss);
+}
+int ProcessRunner::run_once(const std::string& command, const std::vector<std::string>& args, std::stringstream& ss) {
+  return run_once(command, args, "", "", ss);
+}
+int ProcessRunner::run_once(const std::string& command, const std::vector<std::string>& args,
+                            const std::string& unique_id, const std::string& app_install_dir, std::stringstream& ss) {
+  std::unique_ptr<Poco::ProcessHandle> process_handle;
+  int                                  last_exit_code = -1;
+  spdlog::info("Starting process {}", _compose_composite_command(command, args, unique_id, app_install_dir));
+  try {
+    Poco::Pipe out_pipe;
+    process_handle = std::make_unique<Poco::ProcessHandle>(
+        Poco::Process::launch(command, args, app_install_dir, nullptr, &out_pipe, nullptr));
+    Poco::PipeInputStream istr(out_pipe);
+    Poco::StreamCopier::copyStream(istr, ss);
+  } catch (Poco::Exception& e) {
+    spdlog::error("Poco::Exception {}", e.what());
+  } catch (const std::exception& e) {
+    spdlog::error("Std exception {}", e.what());
+  }
+  if (process_handle) {
+    if (process_handle->id() > 0) {
+      // last_exit_code = 0;
+      last_exit_code = process_handle->wait();
+      PrintLastExitStatus(last_exit_code);
     }
     process_handle = nullptr;
   } else {

@@ -53,9 +53,13 @@ public:
                 std::vector<std::string> epilogue_args, std::string unique_id = "", std::string app_install_dir = ".");
 
   static int run_once(const std::string& command);
+  static int run_once(const std::string& command, std::stringstream& ss);
   static int run_once(const std::string& command, const std::vector<std::string>& args);
+  static int run_once(const std::string& command, const std::vector<std::string>& args, std::stringstream& ss);
   static int run_once(const std::string& command, const std::vector<std::string>& args, const std::string& unique_id,
                       const std::string& app_install_dir);
+  static int run_once(const std::string& command, const std::vector<std::string>& args, const std::string& unique_id,
+                      const std::string& app_install_dir, std::stringstream& ss);
 
   virtual ~ProcessRunner();
   void        signal_to_stop();
